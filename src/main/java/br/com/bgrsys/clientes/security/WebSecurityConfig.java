@@ -1,49 +1,50 @@
 package br.com.bgrsys.clientes.security;
 
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/* 
- * Essa Classe apresenta métodos de autenticação em memória, usando o conceito de Basic Autentication.
- * Para que um determinado usuário consiga consumir eses dados, é necessário acrescentar os dados de autenticação.
- */
 
 @Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+    @Bean
+    public BCryptPasswordEncoder encoder(){
+        return new BCryptPasswordEncoder();
+    }
 
-	/* Método pelo qual faz o controle de acesso na API, bloqueando e permitindo o acesso */
-	@Override
-	protected void configure(HttpSecurity http)throws Exception{	
-		http
-			.httpBasic()
-			.and()
-				.authorizeRequests()
-				.anyRequest().authenticated()
-			.and()
-				.csrf().disable();
-	}
-	
-	/* Método pelo qual gerencia a autenticação na API */
-	@Override
-	protected void configure(AuthenticationManagerBuilder auth) throws Exception{
-	
-		auth.inMemoryAuthentication()			
-			.withUser("bruno")
-			.password(passwordEncoder().encode("123456"))
-			.roles("ADMIN");
-	}
-	
-   /* 
-	* Bean utilizado para encodar o password em uma criptografia. Pois para que o 
-	*método de autenticação, exige que a senha esteja criptografada
-	*/
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder();
-	}
+    private static final String[] SWAGGER_WHITELIST = {
+            "/v2/api-docs",
+            "/swagger-resources",
+            "/swagger-resources/**",
+            "/configuration/ui",
+            "/configuration/security",
+            "/swagger-ui.html",
+            "/webjars/**"
+    };
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.headers().frameOptions().disable();
+        http.cors().and().csrf().disable()
+                .addFilterAfter(new JWTFilter(), UsernamePasswordAuthenticationFilter.class)
+                .authorizeRequests()
+                .antMatchers(SWAGGER_WHITELIST).permitAll()
+                .antMatchers(HttpMethod.POST,"/login").permitAll()
+                .antMatchers("/users").hasAnyRole("MANAGERS")
+                .antMatchers(HttpMethod.GET, "/cliente").hasAnyRole("USERS","MANAGERS")
+                .antMatchers(HttpMethod.POST,"/cliente").hasAnyRole("MANAGERS")
+                .anyRequest().authenticated()
+                .and()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+    }
+
 }
